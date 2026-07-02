@@ -1,0 +1,6 @@
+@StackTrading.Host.Service_HostAddress = http://localhost:5110
+
+GET {{StackTrading.Host.Service_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

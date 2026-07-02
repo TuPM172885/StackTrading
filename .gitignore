@@ -1,0 +1,34 @@
+# .NET build outputs
+bin/
+obj/
+artifacts/
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local environment and secrets
+.env
+.env.*
+*.local.json
+secrets.json
+
+# Logs
+*.log
+logs/

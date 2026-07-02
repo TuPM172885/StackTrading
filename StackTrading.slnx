@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/StackTrading.Application/StackTrading.Application.csproj" />
+    <Project Path="src/StackTrading.Contracts/StackTrading.Contracts.csproj" />
+    <Project Path="src/StackTrading.Host.Service/StackTrading.Host.Service.csproj" />
+    <Project Path="src/StackTrading.Infrastructure.TraderEvolution/StackTrading.Infrastructure.TraderEvolution.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StackTrading.Tests.Integration/StackTrading.Tests.Integration.csproj" />
+    <Project Path="tests/StackTrading.Tests.Unit/StackTrading.Tests.Unit.csproj" />
+  </Folder>
+</Solution>
