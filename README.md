@@ -16,3 +16,7 @@ Adapter `TraderEvolution` đầu tiên cho `WS2`, triển khai theo mô hình `s
 dotnet test StackTrading.slnx
 dotnet run --project src/StackTrading.Host.Service
 ```
+
+## Tài liệu
+
+- [Hướng dẫn sử dụng](docs/USER_GUIDE.md)

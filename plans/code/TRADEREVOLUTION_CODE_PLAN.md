@@ -12,14 +12,14 @@ Hoàn thiện `TraderEvolution` adapter từ slice đầu lên production-ready.
 - [x] Có fake broker integration test.
 - [ ] Thay fake DTO bằng DTO mapping theo broker docs thật.
 - [ ] Hoàn thiện auth flow thật.
-- [ ] Hoàn thiện order status mapping.
-- [ ] Hoàn thiện account state mapping.
-- [ ] Hoàn thiện position mapping, gồm FX swap nếu có.
+- [x] Hoàn thiện order status mapping.
+- [x] Hoàn thiện account state mapping.
+- [x] Hoàn thiện position mapping, gồm FX swap nếu có.
 - [ ] Hoàn thiện `FlattenAllAsync` nhiều position/pending order.
 - [ ] Hoàn thiện `TrimToComplianceAsync` theo reduce strategy.
-- [ ] Thêm event normalization tests.
+- [x] Thêm event normalization tests.
 - [ ] Thêm reconnect/resubscribe tests.
-- [ ] Thêm broker error translation tests.
+- [x] Thêm broker error translation tests.
 
 ## Exit Criteria
 

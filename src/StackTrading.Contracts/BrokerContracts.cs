@@ -68,6 +68,20 @@ public enum BrokerEventType
     LiquidationExecuted = 9
 }
 
+public enum BrokerErrorCode
+{
+    Unknown = 0,
+    AuthenticationFailed = 1,
+    AuthorizationFailed = 2,
+    ValidationFailed = 3,
+    NotFound = 4,
+    RateLimited = 5,
+    Timeout = 6,
+    BrokerUnavailable = 7,
+    EnvironmentMismatch = 8,
+    DuplicateRequest = 9
+}
+
 public sealed record ProvisionRequest(
     string CorrelationId,
     string ExternalUserId,
@@ -180,18 +194,30 @@ public interface IBrokerAdapter
 
 public class BrokerAdapterException : Exception
 {
-    public BrokerAdapterException(string message) : base(message)
+    public BrokerAdapterException(string message) : this(BrokerErrorCode.Unknown, message)
     {
     }
 
-    public BrokerAdapterException(string message, Exception innerException) : base(message, innerException)
+    public BrokerAdapterException(string message, Exception innerException) : this(BrokerErrorCode.Unknown, message, innerException)
     {
     }
+
+    public BrokerAdapterException(BrokerErrorCode code, string message) : base(message)
+    {
+        Code = code;
+    }
+
+    public BrokerAdapterException(BrokerErrorCode code, string message, Exception innerException) : base(message, innerException)
+    {
+        Code = code;
+    }
+
+    public BrokerErrorCode Code { get; }
 }
 
 public sealed class BrokerEnvironmentMismatchException : BrokerAdapterException
 {
-    public BrokerEnvironmentMismatchException(string message) : base(message)
+    public BrokerEnvironmentMismatchException(string message) : base(BrokerErrorCode.EnvironmentMismatch, message)
     {
     }
 }

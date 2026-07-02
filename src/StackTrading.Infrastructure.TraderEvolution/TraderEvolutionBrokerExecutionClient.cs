@@ -27,8 +27,11 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
         _logger = logger;
     }
 
-    public Task<BrokerAccount> CreateAccountAsync(ProvisionRequest request, TradingEnv env, CancellationToken ct) =>
-        SendAsync<ProvisionRequest, BrokerAccount>(env, HttpMethod.Post, "/api/accounts", request, ct);
+    public async Task<BrokerAccount> CreateAccountAsync(ProvisionRequest request, TradingEnv env, CancellationToken ct)
+    {
+        var account = await SendAsync<ProvisionRequest, TraderEvolutionAccountDto>(env, HttpMethod.Post, "/api/accounts", request, ct);
+        return TraderEvolutionMapper.ToDomain(account, env);
+    }
 
     public Task SuspendAccountAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
         SendWithoutBodyAsync(env, HttpMethod.Post, $"/api/accounts/{accountId}/suspend?correlationId={Uri.EscapeDataString(correlationId)}", ct);
@@ -36,20 +39,32 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
     public Task CloseAccountAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
         SendWithoutBodyAsync(env, HttpMethod.Delete, $"/api/accounts/{accountId}?correlationId={Uri.EscapeDataString(correlationId)}", ct);
 
-    public Task<OrderResult> PlaceOrderAsync(OrderRequest request, CancellationToken ct) =>
-        SendAsync<OrderRequest, OrderResult>(request.Environment, HttpMethod.Post, "/api/orders", request, ct);
+    public async Task<OrderResult> PlaceOrderAsync(OrderRequest request, CancellationToken ct)
+    {
+        var order = await SendAsync<OrderRequest, TraderEvolutionOrderDto>(request.Environment, HttpMethod.Post, "/api/orders", request, ct);
+        return TraderEvolutionMapper.ToDomain(order, request.Environment);
+    }
 
-    public Task<OrderResult> ModifyOrderAsync(string orderId, OrderChange change, CancellationToken ct) =>
-        SendAsync<OrderChange, OrderResult>(change.Environment, HttpMethod.Patch, $"/api/orders/{orderId}", change, ct);
+    public async Task<OrderResult> ModifyOrderAsync(string orderId, OrderChange change, CancellationToken ct)
+    {
+        var order = await SendAsync<OrderChange, TraderEvolutionOrderDto>(change.Environment, HttpMethod.Patch, $"/api/orders/{orderId}", change, ct);
+        return TraderEvolutionMapper.ToDomain(order, change.Environment);
+    }
 
     public Task CancelOrderAsync(string orderId, string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
         SendWithoutBodyAsync(env, HttpMethod.Delete, $"/api/orders/{orderId}?accountId={Uri.EscapeDataString(accountId)}&correlationId={Uri.EscapeDataString(correlationId)}", ct);
 
-    public Task<IReadOnlyList<Position>> GetPositionsAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendForListAsync<Position>(env, $"/api/accounts/{accountId}/positions?correlationId={Uri.EscapeDataString(correlationId)}", ct);
+    public async Task<IReadOnlyList<Position>> GetPositionsAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct)
+    {
+        var positions = await SendForListAsync<TraderEvolutionPositionDto>(env, $"/api/accounts/{accountId}/positions?correlationId={Uri.EscapeDataString(correlationId)}", ct);
+        return positions.Select(TraderEvolutionMapper.ToDomain).ToList();
+    }
 
-    public Task<AccountState> GetAccountStateAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendAsync<AccountState>(env, $"/api/accounts/{accountId}/state?correlationId={Uri.EscapeDataString(correlationId)}", ct);
+    public async Task<AccountState> GetAccountStateAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct)
+    {
+        var state = await SendAsync<TraderEvolutionAccountStateDto>(env, $"/api/accounts/{accountId}/state?correlationId={Uri.EscapeDataString(correlationId)}", ct);
+        return TraderEvolutionMapper.ToDomain(state, env);
+    }
 
     public Task TrimToComplianceAsync(string accountId, RiskActionRequest request, CancellationToken ct) =>
         SendWithoutResponseAsync(request.Environment, HttpMethod.Post, $"/api/accounts/{accountId}/risk/trim", request, ct);
@@ -111,10 +126,10 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
                 yield break;
             }
 
-            var brokerEvent = JsonSerializer.Deserialize<BrokerEvent>(message, JsonOptions)
+            var brokerEvent = JsonSerializer.Deserialize<TraderEvolutionBrokerEventDto>(message, JsonOptions)
                 ?? throw new BrokerAdapterException("TraderEvolution stream returned an empty payload.");
 
-            yield return brokerEvent;
+            yield return TraderEvolutionMapper.ToDomain(brokerEvent, env);
         }
     }
 
@@ -251,14 +266,23 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
         }
 
         var body = await response.Content.ReadAsStringAsync(ct);
-        throw new BrokerAdapterException($"TraderEvolution call failed with {(int)response.StatusCode}: {body}");
+        throw TraderEvolutionBrokerErrorMapper.ToException(response.StatusCode, response.ReasonPhrase, body);
     }
 
     private static bool IsTransient(Exception exception) =>
-        exception is HttpRequestException || exception is TaskCanceledException;
+        exception is HttpRequestException
+        || exception is TimeoutException
+        || exception is TaskCanceledException
+        || exception is BrokerAdapterException { Code: BrokerErrorCode.BrokerUnavailable or BrokerErrorCode.RateLimited or BrokerErrorCode.Timeout };
 
     private static Exception Translate(Exception exception) =>
-        exception is BrokerAdapterException ? exception : new BrokerAdapterException("TraderEvolution transport failed.", exception);
+        exception switch
+        {
+            BrokerAdapterException => exception,
+            TaskCanceledException => new BrokerAdapterException(BrokerErrorCode.Timeout, "TraderEvolution transport timed out.", exception),
+            HttpRequestException => new BrokerAdapterException(BrokerErrorCode.BrokerUnavailable, "TraderEvolution transport is unavailable.", exception),
+            _ => new BrokerAdapterException("TraderEvolution transport failed.", exception)
+        };
 
     private static async Task<string> ReceiveTextAsync(ClientWebSocket socket, CancellationToken ct)
     {
