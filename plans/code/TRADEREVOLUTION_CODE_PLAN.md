@@ -15,8 +15,9 @@ Hoàn thiện `TraderEvolution` adapter từ slice đầu lên production-ready.
 - [x] Hoàn thiện order status mapping.
 - [x] Hoàn thiện account state mapping.
 - [x] Hoàn thiện position mapping, gồm FX swap nếu có.
-- [ ] Hoàn thiện `FlattenAllAsync` nhiều position/pending order.
-- [ ] Hoàn thiện `TrimToComplianceAsync` theo reduce strategy.
+- [x] Hoàn thiện `FlattenAllAsync` cho nhiều position bằng reduce/close order flow.
+- [ ] Hoàn thiện `FlattenAllAsync` cho pending order khi có broker order-list/cancel spec.
+- [x] Hoàn thiện `TrimToComplianceAsync` theo reduce strategy.
 - [x] Thêm event normalization tests.
 - [ ] Thêm reconnect/resubscribe tests.
 - [x] Thêm broker error translation tests.

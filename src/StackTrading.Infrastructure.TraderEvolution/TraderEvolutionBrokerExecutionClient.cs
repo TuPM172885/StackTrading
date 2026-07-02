@@ -66,11 +66,19 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
         return TraderEvolutionMapper.ToDomain(state, env);
     }
 
-    public Task TrimToComplianceAsync(string accountId, RiskActionRequest request, CancellationToken ct) =>
-        SendWithoutResponseAsync(request.Environment, HttpMethod.Post, $"/api/accounts/{accountId}/risk/trim", request, ct);
+    public async Task TrimToComplianceAsync(string accountId, RiskActionRequest request, CancellationToken ct)
+    {
+        var positions = await GetPositionsAsync(accountId, request.Environment, request.CorrelationId, ct);
+        var orders = TraderEvolutionRiskOrderPlanner.PlanTrimOrders(accountId, request, positions);
+        await ExecuteRiskOrdersAsync("TrimToCompliance", orders, request, ct);
+    }
 
-    public Task FlattenAllAsync(string accountId, RiskActionRequest request, CancellationToken ct) =>
-        SendWithoutResponseAsync(request.Environment, HttpMethod.Post, $"/api/accounts/{accountId}/risk/flatten", request, ct);
+    public async Task FlattenAllAsync(string accountId, RiskActionRequest request, CancellationToken ct)
+    {
+        var positions = await GetPositionsAsync(accountId, request.Environment, request.CorrelationId, ct);
+        var orders = TraderEvolutionRiskOrderPlanner.PlanFlattenOrders(accountId, request, positions);
+        await ExecuteRiskOrdersAsync("FlattenAll", orders, request, ct);
+    }
 
     public async IAsyncEnumerable<BrokerEvent> SubscribeAsync(string accountId, TradingEnv env, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
@@ -170,25 +178,6 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
         return items;
     }
 
-    private async Task SendWithoutResponseAsync<TRequest>(TradingEnv env, HttpMethod method, string path, TRequest payload, CancellationToken ct)
-    {
-        await ExecuteWithRetryAsync(
-            env,
-            async cancellationToken =>
-            {
-                var client = CreateClient(env);
-                using var request = new HttpRequestMessage(method, path)
-                {
-                    Content = JsonContent.Create(payload)
-                };
-
-                using var response = await client.SendAsync(request, cancellationToken);
-                await EnsureSuccessAsync(response, cancellationToken);
-                return true;
-            },
-            ct);
-    }
-
     private async Task SendWithoutBodyAsync(TradingEnv env, HttpMethod method, string path, CancellationToken ct)
     {
         await ExecuteWithRetryAsync(
@@ -201,6 +190,42 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
                 return true;
             },
             ct);
+    }
+
+    private async Task ExecuteRiskOrdersAsync(
+        string actionName,
+        IReadOnlyCollection<OrderRequest> orders,
+        RiskActionRequest request,
+        CancellationToken ct)
+    {
+        if (orders.Count == 0)
+        {
+            _logger.LogInformation(
+                "{RiskAction} produced no reduce orders in {Environment}. Reason={Reason}; RequestedBy={RequestedBy}; CorrelationId={CorrelationId}",
+                actionName,
+                request.Environment,
+                request.Reason,
+                request.RequestedBy,
+                request.CorrelationId);
+            return;
+        }
+
+        foreach (var order in orders)
+        {
+            _logger.LogInformation(
+                "Executing {RiskAction} reduce order for {AccountId} {Symbol} {Side} {Quantity} in {Environment}. Reason={Reason}; RequestedBy={RequestedBy}; CorrelationId={CorrelationId}",
+                actionName,
+                order.AccountId,
+                order.Symbol,
+                order.Side,
+                order.Quantity,
+                order.Environment,
+                request.Reason,
+                request.RequestedBy,
+                request.CorrelationId);
+
+            await PlaceOrderAsync(order, ct);
+        }
     }
 
     private async Task<T> ExecuteWithRetryAsync<T>(TradingEnv env, Func<CancellationToken, Task<T>> callback, CancellationToken ct)

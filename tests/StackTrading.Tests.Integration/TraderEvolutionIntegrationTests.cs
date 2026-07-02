@@ -85,6 +85,15 @@ public sealed class TraderEvolutionIntegrationTests : IAsyncLifetime
         positions.Should().ContainSingle();
         positions![0].Quantity.Should().Be(2m);
 
+        var flattenResponse = await client.PostAsJsonAsync(
+            $"/api/v1/accounts/{account.AccountId}/risk/flatten",
+            new RiskCommand(TradingEnv.Paper, "integration cleanup", "integration-test", null, "corr-flatten-1", null));
+        flattenResponse.EnsureSuccessStatusCode();
+
+        var flattenedPositions = await client.GetFromJsonAsync<List<Position>>($"/api/v1/accounts/{account.AccountId}/positions?env=Paper&correlationId=read-2");
+        flattenedPositions.Should().NotBeNull();
+        flattenedPositions.Should().BeEmpty();
+
         var publisher = _factory!.Services.GetRequiredService<RecordingPublisher>();
         publisher.Events.Should().Contain(e => e.EventType == BrokerEventType.OrderFilled && e.AccountId == account.AccountId);
         publisher.Events.Select(e => e.IdempotencyKey).Should().OnlyHaveUniqueItems();
@@ -181,11 +190,11 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
                 DateTimeOffset.UtcNow);
 
             var account = _accounts[request.AccountId];
-            account.Positions[request.Symbol] = new Position(request.AccountId, request.Symbol, PositionSide.Long, request.Quantity, 1.2345m, 15m, 0m, DateTimeOffset.UtcNow);
+            ApplyOrderToPosition(account, request);
 
             AddEvent(new BrokerEvent(BrokerEventType.OrderAccepted, request.AccountId, request.Environment, request.CorrelationId, $"accept-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order)));
             AddEvent(new BrokerEvent(BrokerEventType.OrderFilled, request.AccountId, request.Environment, request.CorrelationId, $"fill-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order with { Status = OrderStatus.Filled })));
-            AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, request.AccountId, request.Environment, request.CorrelationId, $"pos-{request.AccountId}-{request.Symbol}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(account.Positions[request.Symbol])));
+            AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, request.AccountId, request.Environment, request.CorrelationId, $"pos-{request.AccountId}-{request.Symbol}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { request.AccountId, request.Symbol })));
 
             return Results.Ok(order);
         });
@@ -287,6 +296,33 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
                 stream.Writer.TryWrite(brokerEvent);
             }
         }
+    }
+
+    private static void ApplyOrderToPosition(FakeAccountState account, OrderRequest request)
+    {
+        account.Positions.TryGetValue(request.Symbol, out var existingPosition);
+        var existingSignedQuantity = existingPosition is null
+            ? 0m
+            : existingPosition.Side == PositionSide.Long ? existingPosition.Quantity : -existingPosition.Quantity;
+
+        var orderSignedQuantity = request.Side == OrderSide.Buy ? request.Quantity : -request.Quantity;
+        var newSignedQuantity = existingSignedQuantity + orderSignedQuantity;
+        if (newSignedQuantity == 0)
+        {
+            account.Positions.Remove(request.Symbol);
+            return;
+        }
+
+        var side = newSignedQuantity > 0 ? PositionSide.Long : PositionSide.Short;
+        account.Positions[request.Symbol] = new Position(
+            request.AccountId,
+            request.Symbol,
+            side,
+            Math.Abs(newSignedQuantity),
+            request.LimitPrice ?? request.StopPrice ?? 1.2345m,
+            15m,
+            0m,
+            DateTimeOffset.UtcNow);
     }
 
     public async ValueTask DisposeAsync()
