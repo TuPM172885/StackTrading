@@ -140,25 +140,50 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
         var app = builder.Build();
         app.UseWebSockets();
 
-        app.MapPost("/api/accounts", (ProvisionRequest request) =>
-        {
-            var account = new BrokerAccount(
-                $"ACC-{Guid.NewGuid():N}"[..12],
-                request.ExternalUserId,
-                TradingEnv.Paper,
-                AccountStatus.Active,
-                request.BaseCurrency,
-                request.StartingBalance,
-                request.StartingBalance,
-                DateTimeOffset.UtcNow,
-                request.Metadata);
+        var seededAccount = new BrokerAccount(
+            "3243753",
+            "user-1",
+            TradingEnv.Paper,
+            AccountStatus.Active,
+            "USD",
+            100_000m,
+            100_000m,
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string> { ["source"] = "fake-traderevolution" });
 
-            _accounts[account.AccountId] = new FakeAccountState(account);
-            _streams[account.AccountId] = Channel.CreateUnbounded<BrokerEvent>();
-            return Results.Ok(account);
+        _accounts[seededAccount.AccountId] = new FakeAccountState(seededAccount);
+        _streams[seededAccount.AccountId] = Channel.CreateUnbounded<BrokerEvent>();
+
+        app.MapGet("/traderevolution/v1/accounts", () =>
+        {
+            var accounts = _accounts.Values.Select(state => new
+            {
+                id = state.State.AccountId,
+                name = "test",
+                type = "demo",
+                currency = "USD",
+                status = "ACTIVE",
+                tradingRules = new
+                {
+                    supportBrackets = true,
+                    supportTrailingStop = true
+                },
+                riskRules = new
+                {
+                    maxTrailingDrawdown = 800,
+                    maxPendingOrdersNumber = 60
+                },
+                marginRules = new
+                {
+                    stopOutLevel = 100,
+                    marginWarningLevel = 90
+                }
+            }).ToArray();
+
+            return OkData(new { accounts });
         });
 
-        app.MapPost("/api/accounts/{accountId}/suspend", (string accountId) =>
+        app.MapPost("/traderevolution/v1/accounts/{accountId}/suspend", (string accountId) =>
         {
             if (_accounts.TryGetValue(accountId, out var state))
             {
@@ -168,17 +193,17 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             return Results.Ok();
         });
 
-        app.MapDelete("/api/accounts/{accountId}", (string accountId) =>
+        app.MapDelete("/traderevolution/v1/accounts/{accountId}", (string accountId) =>
         {
             _accounts.TryRemove(accountId, out _);
             return Results.Ok();
         });
 
-        app.MapPost("/api/orders", (OrderRequest request) =>
+        app.MapPost("/traderevolution/v1/accounts/{accountId}/orders", (string accountId, OrderRequest request) =>
         {
             var order = new OrderResult(
                 $"ORD-{Guid.NewGuid():N}"[..12],
-                request.AccountId,
+                accountId,
                 request.Environment,
                 OrderStatus.Accepted,
                 request.Symbol,
@@ -189,51 +214,51 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
                 null,
                 DateTimeOffset.UtcNow);
 
-            var account = _accounts[request.AccountId];
-            ApplyOrderToPosition(account, request);
+            var account = _accounts[accountId];
+            ApplyOrderToPosition(account, request with { AccountId = accountId });
 
-            AddEvent(new BrokerEvent(BrokerEventType.OrderAccepted, request.AccountId, request.Environment, request.CorrelationId, $"accept-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order)));
-            AddEvent(new BrokerEvent(BrokerEventType.OrderFilled, request.AccountId, request.Environment, request.CorrelationId, $"fill-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order with { Status = OrderStatus.Filled })));
-            AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, request.AccountId, request.Environment, request.CorrelationId, $"pos-{request.AccountId}-{request.Symbol}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { request.AccountId, request.Symbol })));
+            AddEvent(new BrokerEvent(BrokerEventType.OrderAccepted, accountId, request.Environment, request.CorrelationId, $"accept-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order)));
+            AddEvent(new BrokerEvent(BrokerEventType.OrderFilled, accountId, request.Environment, request.CorrelationId, $"fill-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order with { Status = OrderStatus.Filled })));
+            AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, accountId, request.Environment, request.CorrelationId, $"pos-{accountId}-{request.Symbol}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { accountId, request.Symbol })));
 
-            return Results.Ok(order);
+            return OkData(order);
         });
 
-        app.MapPatch("/api/orders/{orderId}", (string orderId, OrderChange change) =>
+        app.MapPatch("/traderevolution/v1/accounts/{accountId}/orders/{orderId}", (string accountId, string orderId, OrderChange change) =>
         {
-            var order = new OrderResult(orderId, change.AccountId, change.Environment, OrderStatus.Accepted, "EURUSD", OrderSide.Buy, change.Quantity ?? 1m, 0m, null, "updated", DateTimeOffset.UtcNow);
-            return Results.Ok(order);
+            var order = new OrderResult(orderId, accountId, change.Environment, OrderStatus.Accepted, "EURUSD", OrderSide.Buy, change.Quantity ?? 1m, 0m, null, "updated", DateTimeOffset.UtcNow);
+            return OkData(order);
         });
 
-        app.MapDelete("/api/orders/{orderId}", (string orderId, string accountId, string correlationId) =>
+        app.MapDelete("/traderevolution/v1/accounts/{accountId}/orders/{orderId}", (string accountId, string orderId, string correlationId) =>
         {
             AddEvent(new BrokerEvent(BrokerEventType.OrderCancelled, accountId, TradingEnv.Paper, correlationId, $"cancel-{orderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { orderId, accountId })));
             return Results.Ok();
         });
 
-        app.MapGet("/api/accounts/{accountId}/positions", (string accountId) =>
+        app.MapGet("/traderevolution/v1/accounts/{accountId}/positions", (string accountId) =>
         {
             var positions = _accounts.TryGetValue(accountId, out var state)
                 ? state.Positions.Values.ToList()
                 : [];
 
-            return Results.Ok(positions);
+            return OkData(new { positions });
         });
 
-        app.MapGet("/api/accounts/{accountId}/state", (string accountId) =>
+        app.MapGet("/traderevolution/v1/accounts/{accountId}/state", (string accountId) =>
         {
             return _accounts.TryGetValue(accountId, out var state)
-                ? Results.Ok(state.State)
+                ? OkData(state.State)
                 : Results.NotFound();
         });
 
-        app.MapPost("/api/accounts/{accountId}/risk/trim", (string accountId, RiskActionRequest request) =>
+        app.MapPost("/traderevolution/v1/accounts/{accountId}/risk/trim", (string accountId, RiskActionRequest request) =>
         {
             AddEvent(new BrokerEvent(BrokerEventType.ExecutionReport, accountId, request.Environment, request.CorrelationId, $"trim-{accountId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(request)));
             return Results.Ok();
         });
 
-        app.MapPost("/api/accounts/{accountId}/risk/flatten", (string accountId, RiskActionRequest request) =>
+        app.MapPost("/traderevolution/v1/accounts/{accountId}/risk/flatten", (string accountId, RiskActionRequest request) =>
         {
             _accounts[accountId].Positions.Clear();
             AddEvent(new BrokerEvent(BrokerEventType.LiquidationExecuted, accountId, request.Environment, request.CorrelationId, $"flatten-{accountId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(request)));
@@ -333,6 +358,8 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             await _app.DisposeAsync();
         }
     }
+
+    private static IResult OkData<T>(T data) => Results.Ok(new { s = "ok", d = data });
 
     private sealed class FakeAccountState
     {

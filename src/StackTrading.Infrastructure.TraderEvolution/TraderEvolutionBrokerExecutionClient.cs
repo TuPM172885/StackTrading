@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Net.WebSockets;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -14,56 +15,62 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ITraderEvolutionAccessTokenProvider _accessTokenProvider;
     private readonly TraderEvolutionOptions _options;
     private readonly ILogger<TraderEvolutionBrokerExecutionClient> _logger;
 
     public TraderEvolutionBrokerExecutionClient(
         IHttpClientFactory httpClientFactory,
+        ITraderEvolutionAccessTokenProvider accessTokenProvider,
         IOptions<TraderEvolutionOptions> options,
         ILogger<TraderEvolutionBrokerExecutionClient> logger)
     {
         _httpClientFactory = httpClientFactory;
+        _accessTokenProvider = accessTokenProvider;
         _options = options.Value;
         _logger = logger;
     }
 
     public async Task<BrokerAccount> CreateAccountAsync(ProvisionRequest request, TradingEnv env, CancellationToken ct)
     {
-        var account = await SendAsync<ProvisionRequest, TraderEvolutionAccountDto>(env, HttpMethod.Post, "/api/accounts", request, ct);
-        return TraderEvolutionMapper.ToDomain(account, env);
+        var accounts = await SendAsync<TraderEvolutionAccountsDataDto>(env, ApiPath(env, "accounts"), ct);
+        var account = accounts.Accounts.FirstOrDefault()
+            ?? throw new BrokerAdapterException(BrokerErrorCode.NotFound, "TraderEvolution returned no account for the authenticated user.");
+
+        return TraderEvolutionMapper.ToDomain(account, request, env);
     }
 
     public Task SuspendAccountAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendWithoutBodyAsync(env, HttpMethod.Post, $"/api/accounts/{accountId}/suspend?correlationId={Uri.EscapeDataString(correlationId)}", ct);
+        SendWithoutBodyAsync(env, HttpMethod.Post, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}/suspend?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
 
     public Task CloseAccountAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendWithoutBodyAsync(env, HttpMethod.Delete, $"/api/accounts/{accountId}?correlationId={Uri.EscapeDataString(correlationId)}", ct);
+        SendWithoutBodyAsync(env, HttpMethod.Delete, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
 
     public async Task<OrderResult> PlaceOrderAsync(OrderRequest request, CancellationToken ct)
     {
-        var order = await SendAsync<OrderRequest, TraderEvolutionOrderDto>(request.Environment, HttpMethod.Post, "/api/orders", request, ct);
+        var order = await SendAsync<OrderRequest, TraderEvolutionOrderDto>(request.Environment, HttpMethod.Post, ApiPath(request.Environment, $"accounts/{Uri.EscapeDataString(request.AccountId)}/orders"), request, ct);
         return TraderEvolutionMapper.ToDomain(order, request.Environment);
     }
 
     public async Task<OrderResult> ModifyOrderAsync(string orderId, OrderChange change, CancellationToken ct)
     {
-        var order = await SendAsync<OrderChange, TraderEvolutionOrderDto>(change.Environment, HttpMethod.Patch, $"/api/orders/{orderId}", change, ct);
+        var order = await SendAsync<OrderChange, TraderEvolutionOrderDto>(change.Environment, HttpMethod.Patch, ApiPath(change.Environment, $"accounts/{Uri.EscapeDataString(change.AccountId)}/orders/{Uri.EscapeDataString(orderId)}"), change, ct);
         return TraderEvolutionMapper.ToDomain(order, change.Environment);
     }
 
     public Task CancelOrderAsync(string orderId, string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendWithoutBodyAsync(env, HttpMethod.Delete, $"/api/orders/{orderId}?accountId={Uri.EscapeDataString(accountId)}&correlationId={Uri.EscapeDataString(correlationId)}", ct);
+        SendWithoutBodyAsync(env, HttpMethod.Delete, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}/orders/{Uri.EscapeDataString(orderId)}?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
 
     public async Task<IReadOnlyList<Position>> GetPositionsAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct)
     {
-        var positions = await SendForListAsync<TraderEvolutionPositionDto>(env, $"/api/accounts/{accountId}/positions?correlationId={Uri.EscapeDataString(correlationId)}", ct);
-        return positions.Select(TraderEvolutionMapper.ToDomain).ToList();
+        var positions = await SendAsync<TraderEvolutionPositionsDataDto>(env, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}/positions?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
+        return positions.Positions.Select(row => TraderEvolutionMapper.ToDomainPositionRow(accountId, row)).ToList();
     }
 
     public async Task<AccountState> GetAccountStateAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct)
     {
-        var state = await SendAsync<TraderEvolutionAccountStateDto>(env, $"/api/accounts/{accountId}/state?correlationId={Uri.EscapeDataString(correlationId)}", ct);
-        return TraderEvolutionMapper.ToDomain(state, env);
+        var state = await SendAsync<JsonElement>(env, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}/state?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
+        return TraderEvolutionMapper.ToDomainAccountState(accountId, env, state);
     }
 
     public async Task TrimToComplianceAsync(string accountId, RiskActionRequest request, CancellationToken ct)
@@ -120,8 +127,7 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
     {
         using var socket = new ClientWebSocket();
         var settings = GetEnvironmentOptions(env);
-        socket.Options.SetRequestHeader("X-Api-Key", settings.ApiKey);
-        socket.Options.SetRequestHeader("X-Api-Secret", settings.ApiSecret);
+        await ApplyWebSocketAuthAsync(socket, env, settings, ct);
 
         var uri = new Uri(new Uri(settings.WebSocketBaseUrl.TrimEnd('/')), $"/ws/accounts/{Uri.EscapeDataString(accountId)}?env={env}");
         await socket.ConnectAsync(uri, ct);
@@ -152,6 +158,7 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
                 {
                     Content = JsonContent.Create(payload)
                 };
+                await ApplyRequestAuthAsync(request, env, ct);
 
                 using var response = await client.SendAsync(request, cancellationToken);
                 return await ReadResponseAsync<TResponse>(response, cancellationToken);
@@ -166,16 +173,13 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
             async cancellationToken =>
             {
                 var client = CreateClient(env);
-                using var response = await client.GetAsync(path, cancellationToken);
+                using var request = new HttpRequestMessage(HttpMethod.Get, path);
+                await ApplyRequestAuthAsync(request, env, ct);
+
+                using var response = await client.SendAsync(request, cancellationToken);
                 return await ReadResponseAsync<TResponse>(response, cancellationToken);
             },
             ct);
-    }
-
-    private async Task<IReadOnlyList<TResponse>> SendForListAsync<TResponse>(TradingEnv env, string path, CancellationToken ct)
-    {
-        var items = await SendAsync<List<TResponse>>(env, path, ct);
-        return items;
     }
 
     private async Task SendWithoutBodyAsync(TradingEnv env, HttpMethod method, string path, CancellationToken ct)
@@ -185,7 +189,10 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
             async cancellationToken =>
             {
                 var client = CreateClient(env);
-                using var response = await client.SendAsync(new HttpRequestMessage(method, path), cancellationToken);
+                using var request = new HttpRequestMessage(method, path);
+                await ApplyRequestAuthAsync(request, env, ct);
+
+                using var response = await client.SendAsync(request, cancellationToken);
                 await EnsureSuccessAsync(response, cancellationToken);
                 return true;
             },
@@ -258,11 +265,36 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
         var client = _httpClientFactory.CreateClient();
         client.BaseAddress = new Uri(settings.ApiBaseUrl.TrimEnd('/'));
         client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
-        client.DefaultRequestHeaders.Remove("X-Api-Key");
-        client.DefaultRequestHeaders.Remove("X-Api-Secret");
-        client.DefaultRequestHeaders.Add("X-Api-Key", settings.ApiKey);
-        client.DefaultRequestHeaders.Add("X-Api-Secret", settings.ApiSecret);
         return client;
+    }
+
+    private async Task ApplyRequestAuthAsync(HttpRequestMessage request, TradingEnv env, CancellationToken ct)
+    {
+        var settings = GetEnvironmentOptions(env);
+        if (settings.AuthMode == TraderEvolutionAuthMode.ApiKeyHeaders)
+        {
+            request.Headers.Remove("X-Api-Key");
+            request.Headers.Remove("X-Api-Secret");
+            request.Headers.Add("X-Api-Key", settings.ApiKey);
+            request.Headers.Add("X-Api-Secret", settings.ApiSecret);
+            return;
+        }
+
+        var token = await _accessTokenProvider.GetAccessTokenAsync(env, ct);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    private async Task ApplyWebSocketAuthAsync(ClientWebSocket socket, TradingEnv env, TraderEvolutionEnvironmentOptions settings, CancellationToken ct)
+    {
+        if (settings.AuthMode == TraderEvolutionAuthMode.ApiKeyHeaders)
+        {
+            socket.Options.SetRequestHeader("X-Api-Key", settings.ApiKey);
+            socket.Options.SetRequestHeader("X-Api-Secret", settings.ApiSecret);
+            return;
+        }
+
+        var token = await _accessTokenProvider.GetAccessTokenAsync(env, ct);
+        socket.Options.SetRequestHeader("Authorization", $"Bearer {token}");
     }
 
     private TraderEvolutionEnvironmentOptions GetEnvironmentOptions(TradingEnv env)
@@ -276,11 +308,57 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
         return settings;
     }
 
+    private string ApiPath(TradingEnv env, string relativePath)
+    {
+        var settings = GetEnvironmentOptions(env);
+        var basePath = NormalizePath(settings.ApiBasePath);
+        return $"{basePath}/{relativePath.TrimStart('/')}";
+    }
+
+    private static string NormalizePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path == "/")
+        {
+            return string.Empty;
+        }
+
+        return $"/{path.Trim('/')}";
+    }
+
     private static async Task<T> ReadResponseAsync<T>(HttpResponseMessage response, CancellationToken ct)
     {
         await EnsureSuccessAsync(response, ct);
-        var payload = await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
-        return payload ?? throw new BrokerAdapterException("TraderEvolution returned an empty response body.");
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            throw new BrokerAdapterException("TraderEvolution returned an empty response body.");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        if (document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty("s", out var statusElement))
+        {
+            var status = statusElement.GetString();
+            if (string.Equals(status, "error", StringComparison.OrdinalIgnoreCase))
+            {
+                var message = document.RootElement.TryGetProperty("errmsg", out var errorElement)
+                    ? errorElement.GetString()
+                    : "TraderEvolution returned an error response.";
+
+                throw new BrokerAdapterException(BrokerErrorCode.Unknown, message ?? "TraderEvolution returned an error response.");
+            }
+
+            if (!document.RootElement.TryGetProperty("d", out var dataElement))
+            {
+                throw new BrokerAdapterException("TraderEvolution response envelope is missing the 'd' payload.");
+            }
+
+            return dataElement.Deserialize<T>(JsonOptions)
+                ?? throw new BrokerAdapterException("TraderEvolution response payload could not be deserialized.");
+        }
+
+        return document.RootElement.Deserialize<T>(JsonOptions)
+            ?? throw new BrokerAdapterException("TraderEvolution response payload could not be deserialized.");
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)

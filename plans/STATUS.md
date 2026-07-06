@@ -26,6 +26,7 @@
 
 ## Cập nhật gần nhất
 
+- `2026-07-06`: tiếp tục TraderEvolution plan: thêm auth scaffold, `ApiBasePath`, REST path `/traderevolution/v1`, response wrapper `s/d/errmsg`, fake broker wrapper, token expiry skew, account lookup `GET /accounts`, parser positions/state dạng sequence; `18` unit tests và `1` integration test pass.
 - `2026-07-02`: bổ sung TraderEvolution risk reduce planner cho `FlattenAll`/`TrimToCompliance`; test baseline `12` unit, `1` integration pass.
 - `2026-07-02`: bổ sung TraderEvolution DTO mapper, event normalization, error translation; test baseline `8` unit, `1` integration pass.
 - `2026-07-02`: tạo hệ thống plan và `.gitignore`.

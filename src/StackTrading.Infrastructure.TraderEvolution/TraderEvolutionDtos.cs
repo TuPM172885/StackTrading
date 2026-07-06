@@ -3,6 +3,30 @@ using StackTrading.Contracts;
 
 namespace StackTrading.Infrastructure.TraderEvolution;
 
+public sealed class TraderEvolutionResponse<T>
+{
+    public string? S { get; init; }
+    public T? D { get; init; }
+    public string? Errmsg { get; init; }
+}
+
+public sealed class TraderEvolutionAccountsDataDto
+{
+    public IReadOnlyList<TraderEvolutionAccountSettingsDto> Accounts { get; init; } = [];
+}
+
+public sealed class TraderEvolutionAccountSettingsDto
+{
+    public string Id { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public string Type { get; init; } = string.Empty;
+    public string Currency { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public JsonElement TradingRules { get; init; }
+    public JsonElement RiskRules { get; init; }
+    public JsonElement MarginRules { get; init; }
+}
+
 public sealed class TraderEvolutionAccountDto
 {
     public string AccountId { get; init; } = string.Empty;
@@ -43,6 +67,11 @@ public sealed class TraderEvolutionPositionDto
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
+public sealed class TraderEvolutionPositionsDataDto
+{
+    public IReadOnlyList<JsonElement> Positions { get; init; } = [];
+}
+
 public sealed class TraderEvolutionAccountStateDto
 {
     public string AccountId { get; init; } = string.Empty;
@@ -55,6 +84,11 @@ public sealed class TraderEvolutionAccountStateDto
     public decimal DailyLoss { get; init; }
     public decimal TrailingDrawdown { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
+}
+
+public sealed class TraderEvolutionAccountStateDataDto
+{
+    public JsonElement AccountDetails { get; init; }
 }
 
 public sealed class TraderEvolutionBrokerEventDto
@@ -71,6 +105,8 @@ public sealed class TraderEvolutionBrokerEventDto
 public sealed class TraderEvolutionErrorDto
 {
     public string? Code { get; init; }
+    public string? S { get; init; }
+    public string? Errmsg { get; init; }
     public string? Message { get; init; }
     public string? Error { get; init; }
     public string? CorrelationId { get; init; }

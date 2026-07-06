@@ -11,6 +11,34 @@ public sealed class TraderEvolutionMappingTests
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Fact]
+    public void ToDomain_ShouldMapAccountSettingsFromClientApi()
+    {
+        var dto = JsonSerializer.Deserialize<TraderEvolutionAccountSettingsDto>(
+            """
+            {
+              "id": "3243753",
+              "name": "test",
+              "type": "demo",
+              "currency": "USD",
+              "status": "ACTIVE",
+              "tradingRules": { "supportBrackets": true },
+              "riskRules": { "maxTrailingDrawdown": 800 },
+              "marginRules": { "stopOutLevel": 100 }
+            }
+            """,
+            JsonOptions);
+
+        var request = new ProvisionRequest("corr-1", "user-1", "challenge-1", "USD", 100000m);
+
+        var result = TraderEvolutionMapper.ToDomain(dto!, request, TradingEnv.Paper);
+
+        result.AccountId.Should().Be("3243753");
+        result.ExternalUserId.Should().Be("user-1");
+        result.Status.Should().Be(AccountStatus.Active);
+        result.Metadata.Should().ContainKey("riskRules");
+    }
+
+    [Fact]
     public void ToDomain_ShouldNormalizeOrderStatusAliases()
     {
         var dto = JsonSerializer.Deserialize<TraderEvolutionOrderDto>(
@@ -57,6 +85,26 @@ public sealed class TraderEvolutionMappingTests
 
         result.Side.Should().Be(PositionSide.Short);
         result.Quantity.Should().Be(3m);
+    }
+
+    [Fact]
+    public void ToDomainPositionRow_ShouldMapArrayUsingDefaultPositionsConfig()
+    {
+        var row = JsonSerializer.Deserialize<JsonElement>(
+            """
+            [101, 555, "Sell", 3, 20000, null, null, 1783324800000, 42, null, "NQ", "futures", "CME", null, null, 0, 1.25]
+            """,
+            JsonOptions);
+
+        var result = TraderEvolutionMapper.ToDomainPositionRow("ACC-1", row);
+
+        result.AccountId.Should().Be("ACC-1");
+        result.Symbol.Should().Be("NQ");
+        result.Side.Should().Be(PositionSide.Short);
+        result.Quantity.Should().Be(3m);
+        result.AveragePrice.Should().Be(20000m);
+        result.UnrealizedPnl.Should().Be(42m);
+        result.EstimatedSwap.Should().Be(1.25m);
     }
 
     [Fact]
@@ -119,5 +167,36 @@ public sealed class TraderEvolutionMappingTests
 
         exception.Code.Should().Be(BrokerErrorCode.ValidationFailed);
         exception.Message.Should().Contain("quantity must be positive");
+    }
+
+    [Fact]
+    public void ToDomainAccountState_ShouldMapArrayUsingDefaultAccountDetailsConfig()
+    {
+        var state = JsonSerializer.Deserialize<JsonElement>(
+            """
+            [100000, 100250, 97750, 0, 100000, 0, 97750, 0, 0, 2500, 2400, 0, 0, 0, 100, 0, 97500, 0, -50, 1, 10, 2, 250, 200, 1, 1]
+            """,
+            JsonOptions);
+
+        var result = TraderEvolutionMapper.ToDomainAccountState("ACC-1", TradingEnv.Paper, state);
+
+        result.AccountId.Should().Be("ACC-1");
+        result.Balance.Should().Be(100000m);
+        result.Equity.Should().Be(100250m);
+        result.MarginUsed.Should().Be(2500m);
+        result.MarginAvailable.Should().Be(97750m);
+    }
+
+
+    [Fact]
+    public void ToException_ShouldReadTraderEvolutionEnvelopeErrmsg()
+    {
+        var exception = TraderEvolutionBrokerErrorMapper.ToException(
+            HttpStatusCode.Unauthorized,
+            "Unauthorized",
+            """{ "s": "error", "errmsg": "Invalid token" }""");
+
+        exception.Code.Should().Be(BrokerErrorCode.AuthenticationFailed);
+        exception.Message.Should().Contain("Invalid token");
     }
 }

@@ -11,7 +11,7 @@ public static class TraderEvolutionBrokerErrorMapper
     public static BrokerAdapterException ToException(HttpStatusCode statusCode, string? reasonPhrase, string body)
     {
         var error = TryReadError(body);
-        var message = error?.Message ?? error?.Error ?? body;
+        var message = error?.Errmsg ?? error?.Message ?? error?.Error ?? body;
         if (string.IsNullOrWhiteSpace(message))
         {
             message = reasonPhrase ?? "TraderEvolution call failed.";
