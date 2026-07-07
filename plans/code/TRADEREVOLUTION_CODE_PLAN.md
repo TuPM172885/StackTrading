@@ -48,10 +48,10 @@ Adapter phải:
 - [ ] Order DTO/request chưa khớp Swagger `Trading`.
 - [x] Position DTO đã xử lý response dạng array theo sequence mặc định từ docs/config.
 - [x] Account state DTO đã xử lý account details dạng array theo sequence mặc định từ docs/config.
-- [ ] WebSocket chưa dùng `/stream/tradeEvents` và `/stream/accounts`.
-- [ ] WebSocket chưa gửi subscribe/unsubscribe message.
-- [ ] WebSocket chưa xử lý `PING`/`PONG`.
-- [ ] `FlattenAllAsync` chưa cancel pending orders.
+- [x] WebSocket đã dùng `/stream/tradeEvents` và `/stream/accounts`.
+- [x] WebSocket đã gửi subscribe message cho trade/account streams.
+- [x] WebSocket đã xử lý `PING`/`PONG`.
+- [x] `FlattenAllAsync` đã cancel pending orders trước khi flatten.
 - [ ] Chưa có sandbox credential/token thật để verify Paper.
 
 ## Milestone 1: Chuẩn hóa nền Client API
@@ -90,7 +90,7 @@ Mục tiêu: auth chạy được với sandbox thật hoặc token thật.
 - [ ] Thêm test token refresh khi token hết hạn.
 - [ ] Thêm test auth failure mapping về `AuthenticationFailed`.
 - [ ] Không log token/secret trong mọi path lỗi.
-- [ ] Cập nhật docs config auth trong `docs/USER_GUIDE.md`.
+- [x] Cập nhật docs config auth/readiness trong `docs/TRADEREVOLUTION_PAPER_READINESS.md`.
 
 ## Milestone 3: Account và account state
 
@@ -104,16 +104,16 @@ Mục tiêu: đọc account/state từ Client API thật và map về domain.
   - [x] `currency -> BrokerAccount.BaseCurrency`
   - [x] `status -> AccountStatus`
   - [x] `riskRules`, `tradingRules`, `marginRules -> Metadata`
-- [ ] Quyết định lại `CreateAccountAsync`:
-  - [ ] Nếu Client API không tạo account, map thành lookup existing account theo token/user.
+- [x] Quyết định lại `CreateAccountAsync`:
+  - [x] Nếu Client API không tạo account, map thành lookup existing account theo token/user.
   - [ ] Nếu cần account provisioning, chuyển sang BackOffice API hoặc Middleware Hub boundary.
-  - [ ] Ghi quyết định vào `plans/DECISIONS.md`.
-- [ ] Quyết định lại `SuspendAccountAsync`:
-  - [ ] Nếu thuộc BackOffice API, không fake bằng Client API.
-  - [ ] Trả lỗi rõ `NotSupported`/domain equivalent cho tới khi có BackOffice integration.
-- [ ] Quyết định lại `CloseAccountAsync`:
-  - [ ] Client API có `POST /closeAccount` tạo close request, không đóng ngay.
-  - [ ] Map đúng semantic hoặc tách command mới.
+  - [x] Ghi quyết định vào `plans/DECISIONS.md`.
+- [x] Quyết định lại `SuspendAccountAsync`:
+  - [x] Nếu thuộc BackOffice API, không fake bằng Client API.
+  - [x] Trả lỗi rõ `NotSupported`/domain equivalent cho tới khi có BackOffice integration.
+- [x] Quyết định lại `CloseAccountAsync`:
+  - [x] Client API có `POST /closeAccount` tạo close request, không đóng ngay.
+  - [x] Map đúng semantic hoặc tách command mới.
 - [x] Implement `GET /accounts/{accountId}/state`.
 - [x] Đọc `GET /config` hoặc config cố định từ broker để biết `accountDetailsConfig`.
 - [x] Map account state sequence sang:
@@ -181,13 +181,13 @@ Mục tiêu: stream events thật từ TraderEvolution và normalize về `Broke
   - [x] `riskRules`
   - [x] `marginWarning`
   - [x] `stopOut`
-- [ ] Subscribe account events:
+- [x] Subscribe account events:
   - [x] `accountDetailsData`
   - [x] `account`
 - [x] Xử lý `PING` bằng `PONG`.
 - [x] Validate subscribe response `s = ok`.
 - [x] Map subscribe error `s = error` sang `BrokerAdapterException`.
-- [ ] Normalize:
+- [x] Normalize:
   - [x] `orders -> OrderAccepted/OrderFilled/OrderCancelled/OrderRejected`
   - [x] `openPositions/closePositions -> PositionUpdated`
   - [x] `executions -> ExecutionReport`
@@ -227,35 +227,35 @@ Mục tiêu: risk actions deterministic, audit được và không bỏ sót pen
 
 Mục tiêu: fake broker phản ánh API thật đủ để tránh test xanh giả.
 
-- [ ] Cập nhật fake broker REST base path `/traderevolution/v1`.
-- [ ] Fake broker trả response wrapper `s/d/errmsg`.
-- [ ] Fake broker mô phỏng:
-  - [ ] `/accounts`
-  - [ ] `/accounts/{accountId}/state`
-  - [ ] `/accounts/{accountId}/positions`
-  - [ ] `/accounts/{accountId}/orders`
-  - [ ] order create/modify/cancel
+- [x] Cập nhật fake broker REST base path `/traderevolution/v1`.
+- [x] Fake broker trả response wrapper `s/d/errmsg`.
+- [x] Fake broker mô phỏng:
+  - [x] `/accounts`
+  - [x] `/accounts/{accountId}/state`
+  - [x] `/accounts/{accountId}/positions`
+  - [x] `/accounts/{accountId}/orders`
+  - [x] order create/modify/cancel
   - [ ] token endpoint
-- [ ] Fake broker WebSocket mô phỏng:
-  - [ ] `/stream/tradeEvents`
-  - [ ] `/stream/accounts`
-  - [ ] subscribe response
-  - [ ] `PING`/`PONG`
+- [x] Fake broker WebSocket mô phỏng:
+  - [x] `/stream/tradeEvents`
+  - [x] `/stream/accounts`
+  - [x] subscribe response
+  - [x] `PING`/`PONG`
   - [ ] reconnect
-- [ ] Unit tests tối thiểu:
-  - [ ] auth provider
-  - [ ] response wrapper
-  - [ ] account mapper
-  - [ ] order mapper
-  - [ ] position mapper
-  - [ ] state mapper
-  - [ ] stream event mapper
-  - [ ] risk planner
-- [ ] Integration tests tối thiểu:
-  - [ ] auth + get accounts
-  - [ ] place order + order event
-  - [ ] query positions
-  - [ ] flatten all
+- [x] Unit tests tối thiểu:
+  - [x] auth provider
+  - [x] response wrapper
+  - [x] account mapper
+  - [x] order mapper
+  - [x] position mapper
+  - [x] state mapper
+  - [x] stream event mapper
+  - [x] risk planner
+- [x] Integration tests tối thiểu:
+  - [x] auth + get accounts
+  - [x] place order + order event
+  - [x] query positions
+  - [x] flatten all
   - [ ] reconnect/resubscribe
   - [ ] duplicate event dedupe
 
@@ -293,7 +293,7 @@ Mục tiêu: ký Paper readiness với sandbox thật.
 - [ ] `Paper.AuthMode` dùng mode thật, không dùng legacy fake `ApiKeyHeaders`.
 - [ ] `Live.Enabled = false`.
 - [ ] Paper và Live không trùng endpoint/credential.
-- [ ] Pass full test suite.
+- [x] Pass full test suite.
 - [ ] Pass manual smoke test:
   - [ ] auth
   - [ ] get accounts
@@ -310,16 +310,16 @@ Mục tiêu: ký Paper readiness với sandbox thật.
   - [ ] broker
   - [ ] env
   - [ ] normalized payload
-- [ ] Cập nhật `docs/USER_GUIDE.md`.
-- [ ] Cập nhật `plans/STATUS.md`.
+- [x] Cập nhật Paper readiness docs tại `docs/TRADEREVOLUTION_PAPER_READINESS.md`.
+- [x] Cập nhật `plans/STATUS.md`.
 
 ## Blockers
 
 - [ ] Chưa có TraderEvolution sandbox credential/token thật.
 - [ ] Chưa chốt auth mode Paper sẽ dùng.
 - [ ] Chưa có Swagger/model export đầy đủ cho `Trading` request/response.
-- [ ] Chưa chốt account provisioning thuộc Client API, BackOffice API hay Middleware Hub.
-- [ ] Chưa chốt mapping `symbol -> tradableInstrumentId`.
+- [x] Đã chốt account provisioning hiện tại: Client API chỉ lookup existing account; provisioning thuộc BackOffice API hoặc Middleware Hub boundary.
+- [x] Đã chốt mapping `symbol -> tradableInstrumentId` bước đầu qua `/accounts/{accountId}/instruments` + cache TTL.
 - [x] Máy local đã chạy được `dotnet test` sau khi dừng process host service đang khóa file build.
 
 ## Thứ tự thực hiện đề xuất
@@ -338,12 +338,12 @@ Mục tiêu: ký Paper readiness với sandbox thật.
 
 - [x] `dotnet build StackTrading.slnx` pass.
 - [x] `dotnet test StackTrading.slnx` pass trên runtime chuẩn.
-- [ ] Unit test cover mapper/auth/risk/event paths chính.
-- [ ] Integration test dùng fake broker protocol thật pass.
+- [x] Unit test cover mapper/auth/risk/event paths chính.
+- [x] Integration test dùng fake broker protocol thật pass.
 - [ ] Paper sandbox thật pass auth/account/order/query/stream/risk.
 - [ ] Event publish đủ header và payload cho downstream.
 - [ ] Risk actions deterministic và audit được.
-- [ ] Không có credential thật trong repo.
+- [x] Không có credential thật trong repo.
 - [ ] `Live` chỉ bật sau khi có Live readiness gate riêng.
 
 ## Update Log

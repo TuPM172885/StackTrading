@@ -8,7 +8,7 @@
 
 - [x] Có solution `.NET 8` cho `Contracts`, `Application`, `Infrastructure.TraderEvolution`, `Host.Service`.
 - [x] Có `TraderEvolution` slice đầu với REST, WebSocket stream, event publish abstraction và fake broker integration test.
-- [x] `dotnet test StackTrading.slnx --no-restore` pass baseline gần nhất: `3` unit tests, `1` integration test.
+- [x] `dotnet test StackTrading.slnx --no-restore` pass baseline gần nhất: `57` unit tests, `1` integration test.
 - [x] Có `.gitignore` cho `.NET` build/test artifacts.
 - [x] Có hệ thống plan trong `plans/`.
 
@@ -35,6 +35,7 @@ Exit Criteria:
 
 - [ ] Chốt `IBrokerAdapter` v1.
 - [ ] Chốt `BrokerEvent` envelope v1.
+- [x] Tạo baseline contract tests cho `IBrokerAdapter`/`BrokerEvent` v1 enums và envelope.
 - [ ] Chốt error model và retry/cancellation conventions.
 - [ ] Tạo compatibility tests áp dụng cho mọi broker.
 - [ ] Tài liệu hóa account, order, risk và event lifecycle.

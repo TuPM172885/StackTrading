@@ -220,4 +220,28 @@ public sealed class TraderEvolutionMappingTests
         exception.Code.Should().Be(BrokerErrorCode.AuthenticationFailed);
         exception.Message.Should().Contain("Invalid token");
     }
+
+    [Fact]
+    public void ToDomainOrderRow_ShouldThrow_WhenOrderIdIsMissing()
+    {
+        var row = JsonSerializer.Deserialize<JsonElement>(
+            """{ "accountId": "ACC-1", "status": "working", "symbol": "EURUSD" }""",
+            JsonOptions);
+
+        var act = () => TraderEvolutionMapper.ToDomainOrderRow("ACC-1", TradingEnv.Paper, row);
+
+        act.Should().Throw<BrokerAdapterException>()
+            .Which.Code.Should().Be(BrokerErrorCode.ValidationFailed);
+    }
+
+    [Fact]
+    public void ToDomainPositionRow_ShouldThrow_WhenRowIsNeitherArrayNorObject()
+    {
+        var row = JsonSerializer.Deserialize<JsonElement>("42", JsonOptions);
+
+        var act = () => TraderEvolutionMapper.ToDomainPositionRow("ACC-1", row);
+
+        act.Should().Throw<BrokerAdapterException>()
+            .Which.Code.Should().Be(BrokerErrorCode.ValidationFailed);
+    }
 }

@@ -9,12 +9,12 @@ Theo dõi implementation kỹ thuật cho contract, adapter, test và hardening.
 - [x] Tạo solution `.NET 8`.
 - [x] Tạo slice đầu `TraderEvolution`.
 - [x] Có unit/integration baseline.
-- [ ] Khóa `IBrokerAdapter` v1.
-- [ ] Khóa `BrokerEvent` schema v1.
+- [x] Khóa baseline `IBrokerAdapter` v1.
+- [x] Khóa baseline `BrokerEvent` schema v1.
 - [ ] Hoàn thiện `TraderEvolution` production readiness.
 - [ ] Tạo `Rithmic` module.
 - [ ] Tạo `MT5` module.
-- [ ] Tạo contract tests chung.
+- [x] Tạo contract tests chung.
 - [ ] Tạo resilience tests.
 - [ ] Tạo coverage gates.
 

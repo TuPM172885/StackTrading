@@ -121,6 +121,53 @@ public sealed class TraderEvolutionRiskOrderPlannerTests
         orders[0].Metadata!["riskEnv"].Should().Be("Paper");
     }
 
+    [Fact]
+    public void PlanTrimOrders_ShouldRejectNegativeTargetLimit()
+    {
+        var request = CreateRiskRequest(targetLimit: -1m);
+        var positions = new[] { CreatePosition("ACC-1", "NQ", PositionSide.Long, 1m) };
+
+        var act = () => TraderEvolutionRiskOrderPlanner.PlanTrimOrders("ACC-1", request, positions);
+
+        act.Should().Throw<BrokerAdapterException>()
+            .Which.Code.Should().Be(BrokerErrorCode.ValidationFailed);
+    }
+
+    [Fact]
+    public void PlanFlattenOrders_ShouldOnlyTargetNonFlatPositions()
+    {
+        var request = CreateRiskRequest(targetLimit: null);
+        var positions = new[]
+        {
+            CreatePosition("ACC-1", "NQ", PositionSide.Long, 2m),
+            CreatePosition("ACC-1", "ES", PositionSide.Flat, 0m),
+            CreatePosition("ACC-1", "YM", PositionSide.Short, 1m)
+        };
+
+        var orders = TraderEvolutionRiskOrderPlanner.PlanFlattenOrders("ACC-1", request, positions);
+
+        orders.Should().HaveCount(2);
+        orders.Should().NotContain(o => o.Symbol == "ES");
+    }
+
+    [Fact]
+    public void PlanTrimOrders_ShouldPreserveSmallestPositionWhenExcessIsExact()
+    {
+        // total exposure = 4, target = 2, excess = 2 — fully covered by NQ alone
+        var request = CreateRiskRequest(targetLimit: 2m);
+        var positions = new[]
+        {
+            CreatePosition("ACC-1", "NQ", PositionSide.Long, 3m),
+            CreatePosition("ACC-1", "ES", PositionSide.Short, 1m)
+        };
+
+        var orders = TraderEvolutionRiskOrderPlanner.PlanTrimOrders("ACC-1", request, positions);
+
+        orders.Should().ContainSingle();
+        orders[0].Symbol.Should().Be("NQ");
+        orders[0].Quantity.Should().Be(2m);
+    }
+
     private static RiskActionRequest CreateRiskRequest(decimal? targetLimit) =>
         new(
             "corr-risk-1",

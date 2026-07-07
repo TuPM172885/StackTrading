@@ -79,7 +79,8 @@ public enum BrokerErrorCode
     Timeout = 6,
     BrokerUnavailable = 7,
     EnvironmentMismatch = 8,
-    DuplicateRequest = 9
+    DuplicateRequest = 9,
+    NotSupported = 10
 }
 
 public sealed record ProvisionRequest(

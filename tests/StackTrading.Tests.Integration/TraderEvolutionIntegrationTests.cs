@@ -97,7 +97,14 @@ public sealed class TraderEvolutionIntegrationTests : IAsyncLifetime
 
         var publisher = _factory!.Services.GetRequiredService<RecordingPublisher>();
         publisher.Events.Should().Contain(e => e.EventType == BrokerEventType.OrderFilled && e.AccountId == account.AccountId);
+        publisher.Events.Should().Contain(e => e.EventType == BrokerEventType.AccountStateChanged && e.AccountId == account.AccountId);
         publisher.Events.Select(e => e.IdempotencyKey).Should().OnlyHaveUniqueItems();
+
+        var closeResponse = await client.DeleteAsync($"/api/v1/accounts/{account.AccountId}?env=Paper&correlationId=corr-close-1");
+        closeResponse.EnsureSuccessStatusCode();
+
+        var closedState = await client.GetFromJsonAsync<AccountState>($"/api/v1/accounts/{account.AccountId}/state?env=Paper&correlationId=read-closed");
+        closedState!.Status.Should().Be(AccountStatus.Closed);
     }
 
     public async Task DisposeAsync()
@@ -213,20 +220,14 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             return OkData(new { instruments });
         });
 
-        app.MapPost("/traderevolution/v1/accounts/{accountId}/suspend", (string accountId) =>
+        app.MapPost("/traderevolution/v1/accounts/{accountId}/closeAccount", (string accountId) =>
         {
             if (_accounts.TryGetValue(accountId, out var state))
             {
-                state.State = state.State with { Status = AccountStatus.Suspended, UpdatedAt = DateTimeOffset.UtcNow };
+                state.State = state.State with { Status = AccountStatus.Closed, UpdatedAt = DateTimeOffset.UtcNow };
             }
 
-            return Results.Ok();
-        });
-
-        app.MapDelete("/traderevolution/v1/accounts/{accountId}", (string accountId) =>
-        {
-            _accounts.TryRemove(accountId, out _);
-            return Results.Ok();
+            return OkData(new { requestId = $"close-{accountId}" });
         });
 
         app.MapPost("/traderevolution/v1/accounts/{accountId}/orders", (string accountId, TraderEvolutionOrderRequestDto request) =>
@@ -251,6 +252,7 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             AddEvent(new BrokerEvent(BrokerEventType.OrderAccepted, accountId, TradingEnv.Paper, request.ClOrderId, $"accept-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order)));
             AddEvent(new BrokerEvent(BrokerEventType.OrderFilled, accountId, TradingEnv.Paper, request.ClOrderId, $"fill-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order with { Status = OrderStatus.Filled })));
             AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, accountId, TradingEnv.Paper, request.ClOrderId, $"pos-{accountId}-{request.Symbol}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { accountId, request.Symbol })));
+            AddEvent(new BrokerEvent(BrokerEventType.AccountStateChanged, accountId, TradingEnv.Paper, request.ClOrderId, $"acct-{accountId}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(account.State)));
 
             return OkData(order);
         });
@@ -333,6 +335,8 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
         _ = Task.Run(() => DrainAndAckAsync(socket, context.RequestAborted), context.RequestAborted);
+
+        await SendTextAsync(socket, """{"event":"PING","t":1}""", context.RequestAborted);
 
         foreach (var brokerEvent in _events)
         {
@@ -461,6 +465,12 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
         }
 
         var buffer = Encoding.UTF8.GetBytes(json);
+        await socket.SendAsync(buffer, WebSocketMessageType.Text, true, ct);
+    }
+
+    private static async Task SendTextAsync(WebSocket socket, string message, CancellationToken ct)
+    {
+        var buffer = Encoding.UTF8.GetBytes(message);
         await socket.SendAsync(buffer, WebSocketMessageType.Text, true, ct);
     }
 

@@ -58,10 +58,13 @@ public sealed class TraderEvolutionBrokerExecutionClient : IBrokerExecutionClien
     }
 
     public Task SuspendAccountAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendWithoutBodyAsync(env, HttpMethod.Post, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}/suspend?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
+        // D-006: Client API không có endpoint suspend — thuộc BackOffice API, ngoài scope WS2 hiện tại.
+        throw new BrokerAdapterException(BrokerErrorCode.NotSupported,
+            "SuspendAccount is not supported via the TraderEvolution Client API. Use the BackOffice API for account lifecycle management.");
 
     public Task CloseAccountAsync(string accountId, TradingEnv env, string correlationId, CancellationToken ct) =>
-        SendWithoutBodyAsync(env, HttpMethod.Delete, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
+        // D-007: POST /closeAccount tạo close request async, không đóng tức thì.
+        SendWithoutBodyAsync(env, HttpMethod.Post, ApiPath(env, $"accounts/{Uri.EscapeDataString(accountId)}/closeAccount?correlationId={Uri.EscapeDataString(correlationId)}"), ct);
 
     public async Task<OrderResult> PlaceOrderAsync(OrderRequest request, CancellationToken ct)
     {

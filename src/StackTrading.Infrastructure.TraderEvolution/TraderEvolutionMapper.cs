@@ -296,7 +296,7 @@ public static class TraderEvolutionMapper
             "ordercancelled" or "ordercanceled" or "order_cancelled" or "order.canceled" => BrokerEventType.OrderCancelled,
             "orderrejected" or "order_rejected" or "order.rejected" => BrokerEventType.OrderRejected,
             "positionupdated" or "position_updated" or "position.updated" => BrokerEventType.PositionUpdated,
-            "accountstatechanged" or "account_state_changed" or "account.changed" => BrokerEventType.AccountStateChanged,
+            "accountstatechanged" or "accountchanged" => BrokerEventType.AccountStateChanged,
             "executionreport" or "execution_report" => BrokerEventType.ExecutionReport,
             "marginbreach" or "margin_breach" => BrokerEventType.MarginBreach,
             "drawdownbreach" or "drawdown_breach" => BrokerEventType.DrawdownBreach,

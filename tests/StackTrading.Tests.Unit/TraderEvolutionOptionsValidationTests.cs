@@ -44,6 +44,17 @@ public sealed class TraderEvolutionOptionsValidationTests
         result.Failed.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task AccessTokenProvider_ShouldReturnConfiguredBearerToken()
+    {
+        var options = CreateOptions(CreateEnvironment(authMode: TraderEvolutionAuthMode.BearerToken, accessToken: "paper-token"));
+        var provider = new TraderEvolutionAccessTokenProvider(new ThrowingHttpClientFactory(), Options.Create(options));
+
+        var token = await provider.GetAccessTokenAsync(StackTrading.Contracts.TradingEnv.Paper, CancellationToken.None);
+
+        token.Should().Be("paper-token");
+    }
+
     private static TraderEvolutionOptions CreateOptions(TraderEvolutionEnvironmentOptions? paper = null) =>
         new()
         {
@@ -75,4 +86,10 @@ public sealed class TraderEvolutionOptionsValidationTests
             ClientId = clientId,
             ClientSecret = clientSecret
         };
+
+    private sealed class ThrowingHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) =>
+            throw new InvalidOperationException("This test should not request a token over HTTP.");
+    }
 }
