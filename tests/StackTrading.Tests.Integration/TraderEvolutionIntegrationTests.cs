@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StackTrading.Application;
 using StackTrading.Contracts;
 using StackTrading.Host.Service.Controllers;
+using StackTrading.Infrastructure.TraderEvolution;
 
 namespace StackTrading.Tests.Integration;
 
@@ -183,6 +184,35 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             return OkData(new { accounts });
         });
 
+        app.MapGet("/traderevolution/v1/accounts/{accountId}/instruments", (string accountId) =>
+        {
+            var instruments = new[]
+            {
+                new
+                {
+                    id = "1001",
+                    tradableInstrumentId = "1001",
+                    name = "EURUSD",
+                    symbol = "EURUSD",
+                    ticker = "EURUSD",
+                    type = "forex",
+                    exchange = "FX"
+                },
+                new
+                {
+                    id = "2001",
+                    tradableInstrumentId = "2001",
+                    name = "NQ",
+                    symbol = "NQ",
+                    ticker = "NQ",
+                    type = "futures",
+                    exchange = "CME"
+                }
+            };
+
+            return OkData(new { instruments });
+        });
+
         app.MapPost("/traderevolution/v1/accounts/{accountId}/suspend", (string accountId) =>
         {
             if (_accounts.TryGetValue(accountId, out var state))
@@ -199,27 +229,28 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             return Results.Ok();
         });
 
-        app.MapPost("/traderevolution/v1/accounts/{accountId}/orders", (string accountId, OrderRequest request) =>
+        app.MapPost("/traderevolution/v1/accounts/{accountId}/orders", (string accountId, TraderEvolutionOrderRequestDto request) =>
         {
+            var side = request.Side.Equals("sell", StringComparison.OrdinalIgnoreCase) ? OrderSide.Sell : OrderSide.Buy;
             var order = new OrderResult(
                 $"ORD-{Guid.NewGuid():N}"[..12],
                 accountId,
-                request.Environment,
+                TradingEnv.Paper,
                 OrderStatus.Accepted,
                 request.Symbol,
-                request.Side,
-                request.Quantity,
-                request.Quantity,
+                side,
+                request.Qty,
+                request.Qty,
                 1.2345m,
                 null,
                 DateTimeOffset.UtcNow);
 
             var account = _accounts[accountId];
-            ApplyOrderToPosition(account, request with { AccountId = accountId });
+            ApplyOrderToPosition(account, accountId, request);
 
-            AddEvent(new BrokerEvent(BrokerEventType.OrderAccepted, accountId, request.Environment, request.CorrelationId, $"accept-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order)));
-            AddEvent(new BrokerEvent(BrokerEventType.OrderFilled, accountId, request.Environment, request.CorrelationId, $"fill-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order with { Status = OrderStatus.Filled })));
-            AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, accountId, request.Environment, request.CorrelationId, $"pos-{accountId}-{request.Symbol}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { accountId, request.Symbol })));
+            AddEvent(new BrokerEvent(BrokerEventType.OrderAccepted, accountId, TradingEnv.Paper, request.ClOrderId, $"accept-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order)));
+            AddEvent(new BrokerEvent(BrokerEventType.OrderFilled, accountId, TradingEnv.Paper, request.ClOrderId, $"fill-{order.OrderId}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(order with { Status = OrderStatus.Filled })));
+            AddEvent(new BrokerEvent(BrokerEventType.PositionUpdated, accountId, TradingEnv.Paper, request.ClOrderId, $"pos-{accountId}-{request.Symbol}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { accountId, request.Symbol })));
 
             return OkData(order);
         });
@@ -228,6 +259,11 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
         {
             var order = new OrderResult(orderId, accountId, change.Environment, OrderStatus.Accepted, "EURUSD", OrderSide.Buy, change.Quantity ?? 1m, 0m, null, "updated", DateTimeOffset.UtcNow);
             return OkData(order);
+        });
+
+        app.MapGet("/traderevolution/v1/accounts/{accountId}/orders", (string accountId) =>
+        {
+            return OkData(new { orders = Array.Empty<object[]>() });
         });
 
         app.MapDelete("/traderevolution/v1/accounts/{accountId}/orders/{orderId}", (string accountId, string orderId, string correlationId) =>
@@ -265,44 +301,8 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
             return Results.Ok();
         });
 
-        app.Map("/ws/accounts/{accountId}", async context =>
-        {
-            if (!context.WebSockets.IsWebSocketRequest)
-            {
-                context.Response.StatusCode = 400;
-                return;
-            }
-
-            var accountId = context.Request.RouteValues["accountId"]?.ToString() ?? string.Empty;
-            using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            foreach (var brokerEvent in _events.Where(item => item.AccountId == accountId))
-            {
-                var buffer = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(brokerEvent));
-                await socket.SendAsync(buffer, WebSocketMessageType.Text, true, context.RequestAborted);
-            }
-
-            if (_streams.TryGetValue(accountId, out var stream))
-            {
-                while (!context.RequestAborted.IsCancellationRequested && socket.State == WebSocketState.Open)
-                {
-                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, timeout.Token);
-
-                    try
-                    {
-                        var brokerEvent = await stream.Reader.ReadAsync(linked.Token);
-                        var buffer = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(brokerEvent));
-                        await socket.SendAsync(buffer, WebSocketMessageType.Text, true, context.RequestAborted);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                }
-            }
-
-            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", context.RequestAborted);
-        });
+        app.Map("/traderevolution/v1/stream/tradeEvents", (RequestDelegate)HandleTradeEventsStreamAsync);
+        app.Map("/traderevolution/v1/stream/accounts", (RequestDelegate)HandleAccountsStreamAsync);
 
         await app.StartAsync();
         _app = app;
@@ -323,14 +323,155 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
         }
     }
 
-    private static void ApplyOrderToPosition(FakeAccountState account, OrderRequest request)
+    private async Task HandleTradeEventsStreamAsync(HttpContext context)
+    {
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = 400;
+            return;
+        }
+
+        using var socket = await context.WebSockets.AcceptWebSocketAsync();
+        _ = Task.Run(() => DrainAndAckAsync(socket, context.RequestAborted), context.RequestAborted);
+
+        foreach (var brokerEvent in _events)
+        {
+            await SendBrokerEventAsync(socket, brokerEvent, context.RequestAborted);
+        }
+
+        while (!context.RequestAborted.IsCancellationRequested && socket.State == WebSocketState.Open)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, timeout.Token);
+
+            try
+            {
+                var readTasks = _streams.Values.Select(stream => stream.Reader.ReadAsync(linked.Token).AsTask()).ToArray();
+                var completed = await Task.WhenAny(readTasks);
+                await SendBrokerEventAsync(socket, await completed, context.RequestAborted);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", context.RequestAborted);
+    }
+
+    private static async Task HandleAccountsStreamAsync(HttpContext context)
+    {
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = 400;
+            return;
+        }
+
+        using var socket = await context.WebSockets.AcceptWebSocketAsync();
+        await DrainAndAckAsync(socket, context.RequestAborted);
+    }
+
+    private static async Task DrainAndAckAsync(WebSocket socket, CancellationToken ct)
+    {
+        var buffer = new byte[4096];
+        while (!ct.IsCancellationRequested && socket.State == WebSocketState.Open)
+        {
+            try
+            {
+                var result = await socket.ReceiveAsync(buffer, ct);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    return;
+                }
+
+                var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                using var doc = JsonDocument.Parse(text);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("event", out var eventProp)
+                    && string.Equals(eventProp.GetString(), "subscribe", StringComparison.OrdinalIgnoreCase))
+                {
+                    var requestId = root.TryGetProperty("requestId", out var rid) ? rid.GetInt32() : 0;
+                    var ack = JsonSerializer.Serialize(new { s = "ok", @event = "subscribe", requestId });
+                    var ackBytes = Encoding.UTF8.GetBytes(ack);
+                    await socket.SendAsync(ackBytes, WebSocketMessageType.Text, true, ct);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (WebSocketException)
+            {
+                return;
+            }
+        }
+    }
+
+    private static async Task SendBrokerEventAsync(WebSocket socket, BrokerEvent brokerEvent, CancellationToken ct)
+    {
+        string st;
+        string json;
+
+        switch (brokerEvent.EventType)
+        {
+            case BrokerEventType.OrderAccepted:
+            case BrokerEventType.OrderFilled:
+            case BrokerEventType.OrderCancelled:
+            case BrokerEventType.OrderRejected:
+                st = "orders";
+                var orderStatus = brokerEvent.EventType switch
+                {
+                    BrokerEventType.OrderFilled => "filled",
+                    BrokerEventType.OrderCancelled => "cancelled",
+                    BrokerEventType.OrderRejected => "rejected",
+                    _ => "accepted"
+                };
+                var orderId = brokerEvent.Payload.TryGetProperty("OrderId", out var oid) ? oid.GetString() ?? "unknown" : "unknown";
+                var symbol = brokerEvent.Payload.TryGetProperty("Symbol", out var sym) ? sym.GetString() ?? "UNKNOWN" : "UNKNOWN";
+                var qty = brokerEvent.Payload.TryGetProperty("Quantity", out var q) ? q.GetDecimal() : 0m;
+                var sideVal = brokerEvent.Payload.TryGetProperty("Side", out var sv) && sv.GetInt32() == 1 ? "sell" : "buy";
+                var acctId = brokerEvent.AccountId;
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{acctId}}}","d":{"orders":[{"orderId":"{{{orderId}}}","accountId":"{{{acctId}}}","symbol":"{{{symbol}}}","side":"{{{sideVal}}}","status":"{{{orderStatus}}}","qty":{{{qty}}}}]}}""";
+                break;
+            case BrokerEventType.PositionUpdated:
+                st = "openPositions";
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{brokerEvent.AccountId}}}","d":{{{JsonSerializer.Serialize(brokerEvent.Payload)}}}}""";
+                break;
+            case BrokerEventType.ExecutionReport:
+                st = "executions";
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{brokerEvent.AccountId}}}","d":{{{JsonSerializer.Serialize(brokerEvent.Payload)}}}}""";
+                break;
+            case BrokerEventType.MarginBreach:
+                st = "marginWarning";
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{brokerEvent.AccountId}}}","d":{{{JsonSerializer.Serialize(brokerEvent.Payload)}}}}""";
+                break;
+            case BrokerEventType.DrawdownBreach:
+                st = "riskRules";
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{brokerEvent.AccountId}}}","d":{{{JsonSerializer.Serialize(brokerEvent.Payload)}}}}""";
+                break;
+            case BrokerEventType.LiquidationExecuted:
+                st = "stopOut";
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{brokerEvent.AccountId}}}","d":{{{JsonSerializer.Serialize(brokerEvent.Payload)}}}}""";
+                break;
+            default:
+                st = "accountDetailsData";
+                json = $$$"""{"st":"{{{st}}}","accountId":"{{{brokerEvent.AccountId}}}","d":{{{JsonSerializer.Serialize(brokerEvent.Payload)}}}}""";
+                break;
+        }
+
+        var buffer = Encoding.UTF8.GetBytes(json);
+        await socket.SendAsync(buffer, WebSocketMessageType.Text, true, ct);
+    }
+
+    private static void ApplyOrderToPosition(FakeAccountState account, string accountId, TraderEvolutionOrderRequestDto request)
     {
         account.Positions.TryGetValue(request.Symbol, out var existingPosition);
         var existingSignedQuantity = existingPosition is null
             ? 0m
             : existingPosition.Side == PositionSide.Long ? existingPosition.Quantity : -existingPosition.Quantity;
 
-        var orderSignedQuantity = request.Side == OrderSide.Buy ? request.Quantity : -request.Quantity;
+        var orderSignedQuantity = request.Side.Equals("buy", StringComparison.OrdinalIgnoreCase) ? request.Qty : -request.Qty;
         var newSignedQuantity = existingSignedQuantity + orderSignedQuantity;
         if (newSignedQuantity == 0)
         {
@@ -340,11 +481,11 @@ internal sealed class FakeTraderEvolutionBroker : IAsyncDisposable
 
         var side = newSignedQuantity > 0 ? PositionSide.Long : PositionSide.Short;
         account.Positions[request.Symbol] = new Position(
-            request.AccountId,
+            accountId,
             request.Symbol,
             side,
             Math.Abs(newSignedQuantity),
-            request.LimitPrice ?? request.StopPrice ?? 1.2345m,
+            request.Price ?? request.StopPrice ?? 1.2345m,
             15m,
             0m,
             DateTimeOffset.UtcNow);

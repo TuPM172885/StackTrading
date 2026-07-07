@@ -26,7 +26,8 @@
 
 ## Cập nhật gần nhất
 
-- `2026-07-06`: tiếp tục TraderEvolution plan: thêm auth scaffold, `ApiBasePath`, REST path `/traderevolution/v1`, response wrapper `s/d/errmsg`, fake broker wrapper, token expiry skew, account lookup `GET /accounts`, parser positions/state dạng sequence; `18` unit tests và `1` integration test pass.
+- `2026-07-06`: tiếp tục TraderEvolution plan: thêm auth scaffold, `ApiBasePath`, REST path `/traderevolution/v1`, response wrapper `s/d/errmsg`, fake broker wrapper, token expiry skew, account lookup `GET /accounts`, parser positions/state/orders dạng sequence, instrument lookup/cache, `FlattenAllAsync` cancel active orders trước khi flatten, WebSocket `/stream/tradeEvents` + `/stream/accounts` subscribe/resubscribe + `PING/PONG`; `19` unit tests và `1` integration test pass.
+- `2026-07-06`: thêm sandbox launch profile và user-secrets setup cho TraderEvolution sandbox; build/test pass, đang chờ sandbox `ClientId`, `ClientSecret`, `RefreshToken`.
 - `2026-07-02`: bổ sung TraderEvolution risk reduce planner cho `FlattenAll`/`TrimToCompliance`; test baseline `12` unit, `1` integration pass.
 - `2026-07-02`: bổ sung TraderEvolution DTO mapper, event normalization, error translation; test baseline `8` unit, `1` integration pass.
 - `2026-07-02`: tạo hệ thống plan và `.gitignore`.

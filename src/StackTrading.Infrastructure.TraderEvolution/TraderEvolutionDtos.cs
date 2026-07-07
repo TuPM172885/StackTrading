@@ -72,6 +72,49 @@ public sealed class TraderEvolutionPositionsDataDto
     public IReadOnlyList<JsonElement> Positions { get; init; } = [];
 }
 
+public sealed class TraderEvolutionInstrumentsDataDto
+{
+    public IReadOnlyList<TraderEvolutionInstrumentDto> Instruments { get; init; } = [];
+}
+
+public sealed class TraderEvolutionInstrumentDto
+{
+    public string Id { get; init; } = string.Empty;
+    public string TradableInstrumentId { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public string Symbol { get; init; } = string.Empty;
+    public string Ticker { get; init; } = string.Empty;
+    public string Type { get; init; } = string.Empty;
+    public string Exchange { get; init; } = string.Empty;
+}
+
+public sealed class TraderEvolutionOrderRequestDto
+{
+    public required string TradableInstrumentId { get; init; }
+    public required string Symbol { get; init; }
+    public required string Side { get; init; }
+    public required string Type { get; init; }
+    public required decimal Qty { get; init; }
+    public decimal? Price { get; init; }
+    public decimal? StopPrice { get; init; }
+    public required string Validity { get; init; }
+    public required string ClOrderId { get; init; }
+}
+
+public sealed class TraderEvolutionOrderChangeDto
+{
+    public decimal? Qty { get; init; }
+    public decimal? Price { get; init; }
+    public decimal? StopPrice { get; init; }
+    public string? Validity { get; init; }
+    public required string ClOrderId { get; init; }
+}
+
+public sealed class TraderEvolutionOrdersDataDto
+{
+    public IReadOnlyList<JsonElement> Orders { get; init; } = [];
+}
+
 public sealed class TraderEvolutionAccountStateDto
 {
     public string AccountId { get; init; } = string.Empty;
@@ -100,6 +143,19 @@ public sealed class TraderEvolutionBrokerEventDto
     public string IdempotencyKey { get; init; } = string.Empty;
     public DateTimeOffset OccurredAt { get; init; }
     public JsonElement Payload { get; init; }
+}
+
+public sealed class TraderEvolutionStreamSubscriptionDto
+{
+    public required string Event { get; init; }
+    public required int RequestId { get; init; }
+    public required TraderEvolutionStreamSubscriptionPayloadDto Payload { get; init; }
+}
+
+public sealed class TraderEvolutionStreamSubscriptionPayloadDto
+{
+    public required string AccountId { get; init; }
+    public required string St { get; init; }
 }
 
 public sealed class TraderEvolutionErrorDto

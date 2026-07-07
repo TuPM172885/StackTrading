@@ -64,6 +64,43 @@ public static class TraderEvolutionMapper
             dto.BrokerMessage,
             dto.OccurredAt == default ? DateTimeOffset.UtcNow : dto.OccurredAt);
 
+    public static OrderResult ToDomainOrderRow(string accountId, TradingEnv env, JsonElement row)
+    {
+        if (row.ValueKind == JsonValueKind.Object)
+        {
+            var dto = row.Deserialize<TraderEvolutionOrderDto>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                ?? throw new BrokerAdapterException(BrokerErrorCode.ValidationFailed, "TraderEvolution order payload is empty.");
+
+            return ToDomain(dto, env);
+        }
+
+        if (row.ValueKind != JsonValueKind.Array)
+        {
+            throw new BrokerAdapterException(BrokerErrorCode.ValidationFailed, "TraderEvolution order row must be an array or object.");
+        }
+
+        var values = row.EnumerateArray().ToArray();
+        var orderId = ReadString(values.ElementAtOrDefault(0));
+        var quantity = ReadDecimal(values.ElementAtOrDefault(2));
+        var side = ParseEnum(values.ElementAtOrDefault(3), OrderSide.Buy);
+        var status = ParseOrderStatus(values.ElementAtOrDefault(5));
+        var symbol = ReadString(values.ElementAtOrDefault(21));
+        var occurredAt = ReadUnixMilliseconds(values.ElementAtOrDefault(12)) ?? DateTimeOffset.UtcNow;
+
+        return new OrderResult(
+            Require(orderId, "orderId"),
+            accountId,
+            env,
+            status,
+            string.IsNullOrWhiteSpace(symbol) ? ReadString(values.ElementAtOrDefault(1)) : symbol,
+            side,
+            quantity,
+            ReadDecimal(values.ElementAtOrDefault(6)),
+            ReadNullableDecimal(values.ElementAtOrDefault(7)),
+            BrokerMessage: null,
+            occurredAt);
+    }
+
     public static Position ToDomain(TraderEvolutionPositionDto dto) =>
         new(
             Require(dto.AccountId, nameof(dto.AccountId)),

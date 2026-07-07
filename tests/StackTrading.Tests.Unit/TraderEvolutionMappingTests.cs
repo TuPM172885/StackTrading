@@ -65,6 +65,27 @@ public sealed class TraderEvolutionMappingTests
     }
 
     [Fact]
+    public void ToDomainOrderRow_ShouldMapArrayUsingDefaultOrdersConfig()
+    {
+        var row = JsonSerializer.Deserialize<JsonElement>(
+            """
+            [9001, 1001, 2, "Buy", "Market", "working", 1, 1.2345, null, null, "Day", null, 1783324800000, 1783324800000, true, null, null, null, null, null, null, "EURUSD", "forex", "FX"]
+            """,
+            JsonOptions);
+
+        var result = TraderEvolutionMapper.ToDomainOrderRow("ACC-1", TradingEnv.Paper, row);
+
+        result.OrderId.Should().Be("9001");
+        result.AccountId.Should().Be("ACC-1");
+        result.Symbol.Should().Be("EURUSD");
+        result.Side.Should().Be(OrderSide.Buy);
+        result.Status.Should().Be(OrderStatus.Accepted);
+        result.Quantity.Should().Be(2m);
+        result.FilledQuantity.Should().Be(1m);
+        result.AverageFillPrice.Should().Be(1.2345m);
+    }
+
+    [Fact]
     public void ToDomain_ShouldDerivePositionSideFromNegativeQuantity_WhenSideMissing()
     {
         var dto = JsonSerializer.Deserialize<TraderEvolutionPositionDto>(

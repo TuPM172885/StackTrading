@@ -29,6 +29,23 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "sandbox": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5111",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Kafka__Enabled": "false",
+        "TraderEvolution__Paper__ApiBaseUrl": "https://sandbox-api.traderevolution.com",
+        "TraderEvolution__Paper__WebSocketBaseUrl": "wss://sandbox-api.traderevolution.com",
+        "TraderEvolution__Paper__ApiBasePath": "/traderevolution/v1",
+        "TraderEvolution__Paper__AuthMode": "OAuthRefreshToken",
+        "TraderEvolution__Paper__Enabled": "true",
+        "TraderEvolution__Live__Enabled": "false"
+      }
+    },
     "IIS Express": {
       "commandName": "IISExpress",
       "launchBrowser": true,

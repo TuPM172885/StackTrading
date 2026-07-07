@@ -71,7 +71,9 @@ public static class TraderEvolutionRiskOrderPlanner
         {
             ["riskAction"] = riskAction,
             ["riskReason"] = request.Reason,
-            ["requestedBy"] = request.RequestedBy
+            ["requestedBy"] = request.RequestedBy,
+            ["correlationId"] = request.CorrelationId,
+            ["riskEnv"] = request.Environment.ToString()
         };
 
         if (request.TargetLimit is not null)

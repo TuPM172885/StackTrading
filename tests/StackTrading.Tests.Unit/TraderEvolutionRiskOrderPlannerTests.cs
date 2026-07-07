@@ -78,6 +78,49 @@ public sealed class TraderEvolutionRiskOrderPlannerTests
             .Which.Code.Should().Be(BrokerErrorCode.ValidationFailed);
     }
 
+    [Fact]
+    public void PlanTrimOrders_ShouldReturnEmpty_WhenAlreadyCompliant()
+    {
+        var request = CreateRiskRequest(targetLimit: 10m);
+        var positions = new[]
+        {
+            CreatePosition("ACC-1", "NQ", PositionSide.Long, 3m),
+            CreatePosition("ACC-1", "ES", PositionSide.Short, 2m)
+        };
+
+        var orders = TraderEvolutionRiskOrderPlanner.PlanTrimOrders("ACC-1", request, positions);
+
+        orders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PlanFlattenOrders_ShouldReturnEmpty_WhenNoOpenPositions()
+    {
+        var request = CreateRiskRequest(targetLimit: null);
+        var positions = new[]
+        {
+            CreatePosition("ACC-1", "NQ", PositionSide.Flat, 0m),
+            CreatePosition("ACC-1", "ES", PositionSide.Flat, 0m)
+        };
+
+        var orders = TraderEvolutionRiskOrderPlanner.PlanFlattenOrders("ACC-1", request, positions);
+
+        orders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PlanFlattenOrders_ShouldIncludeAuditMetadata()
+    {
+        var request = CreateRiskRequest(targetLimit: null);
+        var positions = new[] { CreatePosition("ACC-1", "NQ", PositionSide.Long, 1m) };
+
+        var orders = TraderEvolutionRiskOrderPlanner.PlanFlattenOrders("ACC-1", request, positions);
+
+        orders.Should().ContainSingle();
+        orders[0].Metadata!["correlationId"].Should().Be("corr-risk-1");
+        orders[0].Metadata!["riskEnv"].Should().Be("Paper");
+    }
+
     private static RiskActionRequest CreateRiskRequest(decimal? targetLimit) =>
         new(
             "corr-risk-1",

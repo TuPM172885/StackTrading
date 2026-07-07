@@ -15,6 +15,7 @@ Adapter phải:
 ## Nguồn tham chiếu
 
 - API references: `docs/TRADEREVOLUTION_API_REFERENCES.md`
+- Sandbox setup: `docs/TRADEREVOLUTION_SANDBOX_SETUP.md`
 - API audit hiện tại: `plans/code/TRADEREVOLUTION_API_AUDIT.md`
 - User guide: `docs/USER_GUIDE.md`
 - Master checklist: `plans/code/CODE_MASTER_CHECKLIST.md`
@@ -129,26 +130,26 @@ Mục tiêu: đọc account/state từ Client API thật và map về domain.
 
 Mục tiêu: place/modify/cancel/query order và query positions theo API thật.
 
-- [ ] Đọc Swagger `Trading` để khóa request body cho create order.
-- [ ] Implement `POST /accounts/{accountId}/orders`.
-- [ ] Map domain `OrderRequest` sang TraderEvolution order request:
-  - [ ] accountId path
-  - [ ] instrument/tradable instrument id
-  - [ ] side
-  - [ ] type
-  - [ ] quantity
-  - [ ] price/stop price
-  - [ ] validity/time in force
-- [ ] Xử lý bài toán `symbol -> tradableInstrumentId`:
-  - [ ] dùng `GET /accounts/{accountId}/instruments`
-  - [ ] cache instrument map có TTL
+- [x] Đọc Swagger/docs `Trading` để khóa request body bước đầu cho create order.
+- [x] Implement `POST /accounts/{accountId}/orders`.
+- [x] Map domain `OrderRequest` sang TraderEvolution order request:
+  - [x] accountId path
+  - [x] instrument/tradable instrument id
+  - [x] side
+  - [x] type
+  - [x] quantity
+  - [x] price/stop price
+  - [x] validity/time in force
+- [x] Xử lý bài toán `symbol -> tradableInstrumentId`:
+  - [x] dùng `GET /accounts/{accountId}/instruments`
+  - [x] cache instrument map có TTL
   - [ ] test symbol không tồn tại
 - [ ] Implement modify order theo Swagger thật.
 - [ ] Implement cancel order theo Swagger thật.
-- [ ] Implement `GET /accounts/{accountId}/orders`.
+- [x] Implement `GET /accounts/{accountId}/orders`.
 - [ ] Implement `GET /accounts/{accountId}/ordersHistory` khi cần reconcile final orders.
-- [ ] Thêm DTO parser cho order rows dạng array sequence.
-- [ ] Map order statuses về `OrderStatus`.
+- [x] Thêm DTO parser cho order rows dạng array sequence.
+- [x] Map order statuses về `OrderStatus`.
 - [x] Implement `GET /accounts/{accountId}/positions`.
 - [x] Thêm DTO parser cho position rows dạng array sequence.
 - [ ] Map:
@@ -157,7 +158,7 @@ Mục tiêu: place/modify/cancel/query order và query positions theo API thật
   - [x] average price
   - [x] unrealized P/L
   - [ ] instrument name/type/exchange vào metadata hoặc extensions
-- [ ] Unit tests cho order row parser.
+- [x] Unit tests cho order row parser.
 - [ ] Unit tests cho position row parser.
 - [ ] Integration test place/query/cancel với fake broker response wrapper thật.
 
@@ -165,37 +166,37 @@ Mục tiêu: place/modify/cancel/query order và query positions theo API thật
 
 Mục tiêu: stream events thật từ TraderEvolution và normalize về `BrokerEvent`.
 
-- [ ] Đổi stream endpoint sang `/stream/tradeEvents`.
-- [ ] Đổi account stream endpoint sang `/stream/accounts`.
-- [ ] Thêm model subscribe/unsubscribe:
-  - [ ] `event`
-  - [ ] `requestId`
-  - [ ] `payload.accountId`
-  - [ ] `payload.st`
-- [ ] Subscribe trade events:
-  - [ ] `orders`
-  - [ ] `openPositions`
-  - [ ] `closePositions`
-  - [ ] `executions`
-  - [ ] `riskRules`
-  - [ ] `marginWarning`
-  - [ ] `stopOut`
+- [x] Đổi stream endpoint sang `/stream/tradeEvents`.
+- [x] Đổi account stream endpoint sang `/stream/accounts`.
+- [x] Thêm model subscribe/unsubscribe:
+  - [x] `event`
+  - [x] `requestId`
+  - [x] `payload.accountId`
+  - [x] `payload.st`
+- [x] Subscribe trade events:
+  - [x] `orders`
+  - [x] `openPositions`
+  - [x] `closePositions`
+  - [x] `executions`
+  - [x] `riskRules`
+  - [x] `marginWarning`
+  - [x] `stopOut`
 - [ ] Subscribe account events:
-  - [ ] `accountDetailsData`
-  - [ ] `account`
-- [ ] Xử lý `PING` bằng `PONG`.
-- [ ] Validate subscribe response `s = ok`.
-- [ ] Map subscribe error `s = error` sang `BrokerAdapterException`.
+  - [x] `accountDetailsData`
+  - [x] `account`
+- [x] Xử lý `PING` bằng `PONG`.
+- [x] Validate subscribe response `s = ok`.
+- [x] Map subscribe error `s = error` sang `BrokerAdapterException`.
 - [ ] Normalize:
-  - [ ] `orders -> OrderAccepted/OrderFilled/OrderCancelled/OrderRejected`
-  - [ ] `openPositions/closePositions -> PositionUpdated`
-  - [ ] `executions -> ExecutionReport`
-  - [ ] `riskRules -> DrawdownBreach/MarginBreach` nếu đủ thông tin
-  - [ ] `marginWarning -> MarginBreach`
-  - [ ] `stopOut -> LiquidationExecuted`
-  - [ ] `accountDetailsData/account -> AccountStateChanged`
-- [ ] Tạo idempotency key deterministic từ account, event type, broker ids và timestamp.
-- [ ] Reconnect phải resubscribe toàn bộ `st`.
+  - [x] `orders -> OrderAccepted/OrderFilled/OrderCancelled/OrderRejected`
+  - [x] `openPositions/closePositions -> PositionUpdated`
+  - [x] `executions -> ExecutionReport`
+  - [x] `riskRules -> DrawdownBreach/MarginBreach` nếu đủ thông tin
+  - [x] `marginWarning -> MarginBreach`
+  - [x] `stopOut -> LiquidationExecuted`
+  - [x] `accountDetailsData/account -> AccountStateChanged`
+- [x] Tạo idempotency key deterministic từ account, event type, broker ids và timestamp.
+- [x] Reconnect phải resubscribe toàn bộ `st`.
 - [ ] Unit tests cho event normalization theo từng `st`.
 - [ ] Integration test disconnect/reconnect/resubscribe.
 
@@ -205,11 +206,11 @@ Mục tiêu: risk actions deterministic, audit được và không bỏ sót pen
 
 - [x] `TrimToComplianceAsync` có reduce strategy.
 - [x] `FlattenAllAsync` có reduce strategy cho open positions.
-- [ ] `FlattenAllAsync` phải query active orders.
-- [ ] `FlattenAllAsync` phải cancel pending orders trước hoặc sau reduce positions theo quyết định risk.
-- [ ] Ghi rõ thứ tự risk action:
-  - [ ] cancel pending orders
-  - [ ] reduce/close open positions
+- [x] `FlattenAllAsync` phải query active orders.
+- [x] `FlattenAllAsync` phải cancel pending orders trước hoặc sau reduce positions theo quyết định risk.
+- [x] Ghi rõ thứ tự risk action:
+  - [x] cancel pending orders
+  - [x] reduce/close open positions
   - [ ] verify positions/orders về trạng thái an toàn
 - [ ] Thêm metadata audit cho risk orders:
   - [ ] risk action
@@ -358,4 +359,8 @@ Mục tiêu: ký Paper readiness với sandbox thật.
 - Đã bắt đầu thực thi Milestone 1: thêm `ApiBasePath`, đổi REST path sang `/traderevolution/v1`, thêm reader cho envelope `s/d/errmsg`, cập nhật fake broker trả wrapper thật hơn.
 - Đã thêm `TokenExpirySkewSeconds` cho auth token cache.
 - Đã implement account lookup qua `GET /accounts`, parser position row array và parser account state array theo config mặc định trong docs.
-- Test baseline mới: `18` unit tests và `1` integration test pass.
+- Đã implement instrument lookup/cache, TraderEvolution order request DTO, active orders parser và `FlattenAllAsync` cancel active orders trước khi flatten positions.
+- Đã đổi WebSocket subscription sang `/stream/tradeEvents`, gửi subscribe cho các `st` trade event, xử lý `PING/PONG`, subscribe error và normalize event stream cơ bản.
+- Đã thêm `/stream/accounts`, subscribe `accountDetailsData`/`account`, merge trade/account streams vào cùng subscription pipeline và resubscribe cả hai stream sau reconnect.
+- Đã thêm launch profile `sandbox`, `UserSecretsId` và hướng dẫn ghép nối sandbox tại `docs/TRADEREVOLUTION_SANDBOX_SETUP.md`.
+- Test baseline mới: `19` unit tests và `1` integration test pass.

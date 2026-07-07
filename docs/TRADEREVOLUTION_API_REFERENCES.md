@@ -25,4 +25,4 @@ File này lưu nguồn tham chiếu chính thức để dùng khi tích hợp `T
 - WebSocket cũng dùng Bearer token trong `Authorization` header hoặc query `access_token`.
 - Trading event stream mặc định: `/traderevolution/v1/stream/tradeEvents`.
 - Account detail stream mặc định: `/traderevolution/v1/stream/accounts`.
-
+- Local sandbox setup: `docs/TRADEREVOLUTION_SANDBOX_SETUP.md`
